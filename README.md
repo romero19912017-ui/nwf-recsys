@@ -6,7 +6,7 @@
 
 ## NWF for Recommendation Systems
 
-`nwf-recsys` provides matrix factorization encoders that produce **semantic charges** `(z, sigma)` for users and items. Recommendations are made by searching the item index with the user charge; supports incremental addition of users and items.
+`nwf-recsys` provides matrix factorization encoders that produce **semantic charges** `(z, sigma)` for users and items. Recommendations are made by searching the item index with the user charge; supports incremental addition of users and items. Uses `nwf-core` Charge (supports `alpha` for weighted items/users since 0.3+).
 
 ### Features
 
@@ -97,6 +97,7 @@ Notebook: `notebooks/movielens_100k.ipynb`
 | **Cold-start** | New user with few ratings (simulate via perturbed charge) | encode_user, Charge |
 | **Incremental items** | Add new items to index without retraining | Field.add, encode_item |
 | **Metrics** | HR@k, NDCG@k | hit_rate_at_k, top-k search |
+| **Weighted items** | Charge.alpha for item importance (nwf-core 0.3+) | Charge(z, sigma, alpha=...) |
 
 ---
 

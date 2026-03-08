@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "nwf-core>=0.2.3",
+    "nwf-core>=0.3.0",
     "numpy>=1.21",
     "torch>=1.10",
     "scikit-learn>=1.0",

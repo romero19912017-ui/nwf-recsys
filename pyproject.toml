@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nwf-recsys"
-version = "0.1.0"
+version = "0.1.1"
 description = "NWF for recommendation systems: matrix factorization with (z, sigma) for users and items. MovieLens, HR@k, incremental learning."
 readme = "README.md"
 license = {text = "MIT"}

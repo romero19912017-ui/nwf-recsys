@@ -1,25 +1,26 @@
 # -*- coding: utf-8 -*-
-"""Example: MovieLens 100k recommendations with NWF MatrixFactorEncoder.
+"""MovieLens 100k: recommendations with NWF MatrixFactorEncoder.
 
-Build item index, recommend by user charge. Add new user without retraining.
-Run: python movielens_100k.py
+Build item Field, recommend by user charge. HR@k, cold-start simulation.
+Run: python movielens_100k.py [--epochs 15] [--save results/recsys.png]
 """
-
 from __future__ import annotations
 
+import argparse
+import os
 import sys
 from pathlib import Path
 from urllib.request import urlretrieve
 import zipfile
-import os
 
 import numpy as np
 
-# Add src to path for development
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
 from nwf import Charge, Field
 from nwf.recsys import MatrixFactorEncoder
+
+if "--save" in sys.argv or os.environ.get("MPLBACKEND"):
+    import matplotlib
+    matplotlib.use("Agg")
 
 
 def load_movielens_100k(data_dir: Path) -> tuple:
@@ -44,28 +45,34 @@ def load_movielens_100k(data_dir: Path) -> tuple:
     return user_idx, item_idx, ratings, len(user_u), len(item_u)
 
 
-def hit_rate_at_k(
-    recs: np.ndarray, holdout: dict, k: int = 10
-) -> float:
+def hit_rate_at_k(recs: np.ndarray, holdout: dict, k: int = 10) -> float:
     """HR@k: fraction of users with at least one hit in top-k."""
     hits = 0
     for u, items in holdout.items():
         if u >= len(recs):
             continue
-        topk = set(recs[u, :k])
+        topk = set(recs[u, :k].astype(int))
         if topk & set(items):
             hits += 1
     return hits / max(len(holdout), 1)
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="MovieLens 100k with NWF")
+    parser.add_argument("--epochs", type=int, default=15)
+    parser.add_argument("--latent-dim", type=int, default=32)
+    parser.add_argument("--batch-size", type=int, default=2048)
+    parser.add_argument("--top-k", type=int, default=20)
+    parser.add_argument("--save", type=str, default="")
+    parser.add_argument("--seed", type=int, default=42)
+    args = parser.parse_args()
+
     data_dir = Path(__file__).parent / "data"
     data_dir.mkdir(exist_ok=True)
     user_idx, item_idx, ratings, n_users, n_items = load_movielens_100k(data_dir)
     print(f"Loaded: {len(ratings)} ratings, {n_users} users, {n_items} items")
 
-    # Train/test split by last rating per user
-    rng = np.random.RandomState(42)
+    rng = np.random.RandomState(args.seed)
     holdout = {}
     train_u, train_i, train_r = [], [], []
     for u in range(n_users):
@@ -82,8 +89,8 @@ def main() -> None:
     train_r = np.array(train_r)
 
     print("Training MatrixFactorEncoder...")
-    enc = MatrixFactorEncoder(n_users, n_items, latent_dim=32)
-    enc.fit(train_u, train_i, train_r, epochs=15, batch_size=2048, lr=1e-2)
+    enc = MatrixFactorEncoder(n_users, n_items, latent_dim=args.latent_dim)
+    enc.fit(train_u, train_i, train_r, epochs=args.epochs, batch_size=args.batch_size, lr=1e-2)
 
     print("Building item Field...")
     field = Field()
@@ -91,26 +98,39 @@ def main() -> None:
         z, s = enc.encode_item(j)
         field.add(Charge(z=z, sigma=s), labels=[j], ids=[j])
 
-    print("Recommendations: search by user charge...")
+    print("Computing HR@k for k=1,5,10,20...")
     recs = []
     for u in range(n_users):
         zu, su = enc.encode_user(u)
         q = Charge(z=zu, sigma=su)
-        _, idx, _ = field.search(q, k=20)
-        recs.append(idx)
+        _, _, labs = field.search(q, k=args.top_k)
+        item_ids = np.array(labs[0]).astype(int)
+        recs.append(item_ids)
     recs = np.array(recs)
-    hr10 = hit_rate_at_k(recs, holdout, k=10)
-    print(f"HR@10: {hr10:.3f}")
+    ks = [1, 5, 10, 20]
+    hr_values = [hit_rate_at_k(recs, holdout, k=k) for k in ks]
+    for k, hr in zip(ks, hr_values):
+        print(f"HR@{k}: {hr:.3f}")
+    hr10 = hr_values[2]
 
-    print("Adding new user (cold-start simulation)...")
-    # Simulate new user: random ratings on some items
-    new_items = rng.choice(n_items, size=10, replace=False)
-    new_ratings = rng.uniform(3, 5, size=10).astype(np.float32)
-    # We would need to extend the model for true cold-start; here we use existing user 0 as proxy
+    print("Cold-start simulation: new user...")
     zu, su = enc.encode_user(0)
-    q_new = Charge(z=zu + rng.randn(32) * 0.1, sigma=su)
-    _, idx_new, _ = field.search(q_new, k=5)
-    print(f"Top-5 for new user: {idx_new}")
+    q_new = Charge(z=zu + rng.randn(args.latent_dim) * 0.1, sigma=su)
+    _, _, labs_new = field.search(q_new, k=5)
+    top5 = np.array(labs_new[0]).astype(int)
+    print(f"Top-5 for new user: {top5}")
+
+    if args.save:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.bar([str(k) for k in ks], hr_values, color="C0")
+        ax.set_xlabel("k")
+        ax.set_ylabel("HR@k")
+        ax.set_title("MovieLens 100k: Hit Rate at k")
+        ax.set_ylim(0, 1)
+        Path(args.save).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(args.save, dpi=150, bbox_inches="tight")
+        print(f"Plot saved to {args.save}")
     print("Done.")
 
 

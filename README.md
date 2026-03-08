@@ -71,16 +71,32 @@ distances, indices, labels = field.search(q, k=10)
 
 ---
 
-## Example: MovieLens 100k
+## Examples
 
+Install with examples: `pip install nwf-recsys[examples]`
+
+| Script | Description |
+|--------|-------------|
+| [movielens_100k.py](examples/movielens_100k.py) | MovieLens 100k: HR@k, item Field, cold-start simulation |
+
+Run:
 ```bash
-cd examples && python movielens_100k.py
+python examples/movielens_100k.py --epochs 15
+python examples/movielens_100k.py --save results/recsys.png
 ```
 
-- Downloads MovieLens 100k automatically
-- Trains MatrixFactorEncoder (15 epochs)
-- Builds item Field, computes HR@10
-- Simulates cold-start for new user
+Notebook: `notebooks/movielens_100k.ipynb`
+
+---
+
+## Application areas (сферы применения)
+
+| Area | Use case | Components |
+|------|----------|------------|
+| **Collaborative filtering** | User-item recommendations by charge similarity | MatrixFactorEncoder, Field.search |
+| **Cold-start** | New user with few ratings (simulate via perturbed charge) | encode_user, Charge |
+| **Incremental items** | Add new items to index without retraining | Field.add, encode_item |
+| **Metrics** | HR@k, NDCG@k | hit_rate_at_k, top-k search |
 
 ---
 
